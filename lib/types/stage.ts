@@ -3,7 +3,7 @@ import type { Slide } from '@/lib/types/slides';
 import type { Action } from '@/lib/types/action';
 import type { PBLProjectConfig } from '@/lib/pbl/types';
 
-export type SceneType = 'slide' | 'quiz' | 'interactive' | 'pbl';
+export type SceneType = 'slide' | 'quiz' | 'interactive' | 'pbl' | 'immersive';
 
 export type StageMode = 'autonomous' | 'playback';
 
@@ -76,7 +76,7 @@ export interface Scene {
 /**
  * Scene content based on type
  */
-export type SceneContent = SlideContent | QuizContent | InteractiveContent | PBLContent;
+export type SceneContent = SlideContent | QuizContent | InteractiveContent | PBLContent | ImmersiveContent;
 
 /**
  * Slide content - PPTist Canvas data
@@ -128,6 +128,18 @@ export interface InteractiveContent {
 export interface PBLContent {
   type: 'pbl';
   projectConfig: PBLProjectConfig;
+}
+
+/**
+ * Immersive content - Scene-based visual storytelling
+ */
+export interface ImmersiveContent {
+  type: 'immersive';
+  sceneImagePrompt: string;    // AI 生图的 prompt
+  sceneImageUrl?: string;      // 生成后的图片 URL
+  narrativeText: string;       // 场景叙述文字
+  historicalContext?: string;   // 历史背景（可选）
+  keyFormulas?: string[];      // 核心公式（KaTeX）
 }
 
 // Re-export generation types for convenience

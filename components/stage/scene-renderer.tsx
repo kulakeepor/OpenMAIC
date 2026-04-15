@@ -6,6 +6,7 @@ import { SlideEditor as SlideRenderer } from '../slide-renderer/Editor';
 import { QuizView } from '../scene-renderers/quiz-view';
 import { InteractiveRenderer } from '../scene-renderers/interactive-renderer';
 import { PBLRenderer } from '../scene-renderers/pbl-renderer';
+import { ImmersiveRenderer } from '../scene-renderers/immersive-renderer';
 
 interface SceneRendererProps {
   readonly scene: Scene;
@@ -27,6 +28,9 @@ export function SceneRenderer({ scene, mode }: SceneRendererProps) {
       case 'pbl':
         if (scene.content.type !== 'pbl') return <div>Invalid PBL content</div>;
         return <PBLRenderer content={scene.content} mode={mode} sceneId={scene.id} />;
+      case 'immersive':
+        if (scene.content.type !== 'immersive') return <div>Invalid immersive content</div>;
+        return <ImmersiveRenderer content={scene.content} mode={mode} sceneId={scene.id} />;
       default:
         return <div>Unknown scene type</div>;
     }

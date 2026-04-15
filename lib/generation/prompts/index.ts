@@ -31,4 +31,6 @@ export const PROMPT_IDS = {
   INTERACTIVE_HTML: 'interactive-html',
   INTERACTIVE_ACTIONS: 'interactive-actions',
   PBL_ACTIONS: 'pbl-actions',
+  IMMERSIVE_CONTENT: 'immersive-content',
+  IMMERSIVE_ACTIONS: 'immersive-actions',
 } as const;

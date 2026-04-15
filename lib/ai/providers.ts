@@ -398,8 +398,8 @@ export const PROVIDERS: Record<ProviderId, ProviderConfig> = {
   glm: {
     id: 'glm',
     name: 'GLM',
-    type: 'openai',
-    defaultBaseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+    type: 'anthropic',
+    defaultBaseUrl: 'https://open.bigmodel.cn/api/anthropic',
     requiresApiKey: true,
     icon: '/logos/glm.svg',
     models: [

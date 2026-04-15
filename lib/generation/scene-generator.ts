@@ -14,6 +14,7 @@ import type {
   GeneratedQuizContent,
   GeneratedInteractiveContent,
   GeneratedPBLContent,
+  GeneratedImmersiveContent,
   ScientificModel,
   PdfImage,
   ImageMapping,
@@ -177,6 +178,7 @@ export async function generateSceneContent(
   | GeneratedQuizContent
   | GeneratedInteractiveContent
   | GeneratedPBLContent
+  | GeneratedImmersiveContent
   | null
 > {
   const {
@@ -224,6 +226,8 @@ export async function generateSceneContent(
       return generateInteractiveContent(outline, aiCall, languageDirective);
     case 'pbl':
       return generatePBLSceneContent(outline, languageModel, languageDirective);
+    case 'immersive':
+      return generateImmersiveContent(outline, aiCall, agents, languageDirective);
     default:
       return null;
   }
@@ -896,6 +900,43 @@ async function generatePBLSceneContent(
 }
 
 /**
+ * Generate immersive scene content
+ * Produces a narrative-driven, "travel to the knowledge scene" experience
+ */
+async function generateImmersiveContent(
+  outline: SceneOutline,
+  aiCall: AICallFn,
+  agents?: AgentInfo[],
+  languageDirective?: string,
+): Promise<GeneratedImmersiveContent | null> {
+  const teacherContext = formatTeacherPersonaForPrompt(agents);
+
+  const prompts = buildPrompt(PROMPT_IDS.IMMERSIVE_CONTENT, {
+    outlineTitle: outline.title,
+    outlineKeyPoints: (outline.keyPoints || []).map((p, i) => `${i + 1}. ${p}`).join('\n'),
+    requirement: outline.description,
+    teacherContext,
+    languageDirective: buildLanguageText(languageDirective, outline.languageNote),
+  });
+
+  if (!prompts) {
+    return null;
+  }
+
+  log.debug(`Generating immersive content for: ${outline.title}`);
+  const response = await aiCall(prompts.system, prompts.user);
+  const generatedData = parseJsonResponse<GeneratedImmersiveContent>(response);
+
+  if (!generatedData || !generatedData.sceneImagePrompt || !generatedData.narrativeText) {
+    log.error(`Failed to parse immersive content for: ${outline.title}`);
+    return null;
+  }
+
+  log.debug(`Got immersive content for: ${outline.title}`);
+  return generatedData;
+}
+
+/**
  * Extract HTML document from AI response.
  * Tries to find <!DOCTYPE html>...</html> first, then falls back to code block extraction.
  */
@@ -941,7 +982,8 @@ export async function generateSceneActions(
     | GeneratedSlideContent
     | GeneratedQuizContent
     | GeneratedInteractiveContent
-    | GeneratedPBLContent,
+    | GeneratedPBLContent
+    | GeneratedImmersiveContent,
   aiCall: AICallFn,
   options: SceneActionsOptions = {},
 ): Promise<Action[]> {
@@ -1062,6 +1104,36 @@ export async function generateSceneActions(
     return generateDefaultPBLActions(outline);
   }
 
+  if (outline.type === 'immersive' && 'narrativeText' in content) {
+    const agentsText = formatAgentsForPrompt(agents);
+    const prompts = buildPrompt(PROMPT_IDS.IMMERSIVE_ACTIONS, {
+      title: outline.title,
+      keyPoints: (outline.keyPoints || []).map((p, i) => `${i + 1}. ${p}`).join('\n'),
+      description: outline.description,
+      narrativeText: (content as GeneratedImmersiveContent).narrativeText,
+      historicalContext: (content as GeneratedImmersiveContent).historicalContext || '',
+      keyFormulas: (content as GeneratedImmersiveContent).keyFormulas?.join(', ') || '',
+      sceneImagePrompt: (content as GeneratedImmersiveContent).sceneImagePrompt,
+      courseContext: buildCourseContext(ctx),
+      agents: agentsText,
+      userProfile: userProfile || '',
+      languageDirective: buildLanguageText(languageDirective, outline.languageNote),
+    });
+
+    if (!prompts) {
+      return generateDefaultImmersiveActions(outline);
+    }
+
+    const response = await aiCall(prompts.system, prompts.user);
+    const actions = parseActionsFromStructuredOutput(response, outline.type);
+
+    if (actions.length > 0) {
+      return processActions(actions, [], agents);
+    }
+
+    return generateDefaultImmersiveActions(outline);
+  }
+
   return [];
 }
 
@@ -1075,6 +1147,20 @@ function generateDefaultPBLActions(_outline: SceneOutline): Action[] {
       type: 'speech',
       title: 'PBL 项目介绍',
       text: '现在让我们开始一个项目式学习活动。请选择你的角色，查看任务看板，开始协作完成项目。',
+    },
+  ];
+}
+
+/**
+ * Generate default immersive Actions (fallback)
+ */
+function generateDefaultImmersiveActions(_outline: SceneOutline): Action[] {
+  return [
+    {
+      id: `action_${nanoid(8)}`,
+      type: 'narrate',
+      title: 'Scene Narration',
+      text: 'Welcome to this immersive scene. Let us explore the moment where this concept came to life.',
     },
   ];
 }
@@ -1239,7 +1325,8 @@ export function createSceneWithActions(
     | GeneratedSlideContent
     | GeneratedQuizContent
     | GeneratedInteractiveContent
-    | GeneratedPBLContent,
+    | GeneratedPBLContent
+    | GeneratedImmersiveContent,
   actions: Action[],
   api: ReturnType<typeof createStageAPI>,
 ): string | null {
@@ -1316,6 +1403,26 @@ export function createSceneWithActions(
       content: {
         type: 'pbl',
         projectConfig: content.projectConfig,
+      },
+      actions,
+    });
+
+    return sceneResult.success ? (sceneResult.data ?? null) : null;
+  }
+
+  if (outline.type === 'immersive' && 'narrativeText' in content) {
+    const immersiveContent = content as GeneratedImmersiveContent;
+    const sceneResult = api.scene.create({
+      type: 'immersive',
+      title: outline.title,
+      order: outline.order,
+      content: {
+        type: 'immersive',
+        sceneImagePrompt: immersiveContent.sceneImagePrompt,
+        sceneImageUrl: immersiveContent.sceneImageUrl,
+        narrativeText: immersiveContent.narrativeText,
+        historicalContext: immersiveContent.historicalContext,
+        keyFormulas: immersiveContent.keyFormulas,
       },
       actions,
     });

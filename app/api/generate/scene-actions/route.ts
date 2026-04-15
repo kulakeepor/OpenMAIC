@@ -21,6 +21,7 @@ import type {
   GeneratedQuizContent,
   GeneratedInteractiveContent,
   GeneratedPBLContent,
+  GeneratedImmersiveContent,
 } from '@/lib/types/generation';
 import type { SpeechAction } from '@/lib/types/action';
 import { createLogger } from '@/lib/logger';
@@ -52,7 +53,8 @@ export async function POST(req: NextRequest) {
         | GeneratedSlideContent
         | GeneratedQuizContent
         | GeneratedInteractiveContent
-        | GeneratedPBLContent;
+        | GeneratedPBLContent
+        | GeneratedImmersiveContent;
       stageId: string;
       agents?: AgentInfo[];
       previousSpeeches?: string[];

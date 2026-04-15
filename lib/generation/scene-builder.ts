@@ -10,6 +10,7 @@ import type {
   GeneratedQuizContent,
   GeneratedInteractiveContent,
   GeneratedPBLContent,
+  GeneratedImmersiveContent,
   PdfImage,
   ImageMapping,
 } from '@/lib/types/generation';
@@ -132,7 +133,8 @@ export function buildCompleteScene(
     | GeneratedSlideContent
     | GeneratedQuizContent
     | GeneratedInteractiveContent
-    | GeneratedPBLContent,
+    | GeneratedPBLContent
+    | GeneratedImmersiveContent,
   actions: Action[],
   stageId: string,
 ): Scene | null {
@@ -219,6 +221,28 @@ export function buildCompleteScene(
       content: {
         type: 'pbl',
         projectConfig: content.projectConfig,
+      },
+      actions,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+  }
+
+  if (outline.type === 'immersive' && 'narrativeText' in content) {
+    const immersiveContent = content as GeneratedImmersiveContent;
+    return {
+      id: sceneId,
+      stageId,
+      type: 'immersive',
+      title: outline.title,
+      order: outline.order,
+      content: {
+        type: 'immersive',
+        sceneImagePrompt: immersiveContent.sceneImagePrompt,
+        sceneImageUrl: immersiveContent.sceneImageUrl,
+        narrativeText: immersiveContent.narrativeText,
+        historicalContext: immersiveContent.historicalContext,
+        keyFormulas: immersiveContent.keyFormulas,
       },
       actions,
       createdAt: Date.now(),

@@ -14,6 +14,7 @@ import type {
   QuizContent,
   InteractiveContent,
   PBLContent,
+  ImmersiveContent,
 } from '@/lib/types/stage';
 
 // ==================== Utility Functions ====================
@@ -107,6 +108,17 @@ export function createDefaultPBLContent(): PBLContent {
 }
 
 /**
+ * Create default ImmersiveContent
+ */
+export function createDefaultImmersiveContent(): ImmersiveContent {
+  return {
+    type: 'immersive',
+    sceneImagePrompt: '',
+    narrativeText: '',
+  };
+}
+
+/**
  * Create default Content based on type
  */
 export function createDefaultContent(type: SceneType): SceneContent {
@@ -119,6 +131,8 @@ export function createDefaultContent(type: SceneType): SceneContent {
       return createDefaultInteractiveContent();
     case 'pbl':
       return createDefaultPBLContent();
+    case 'immersive':
+      return createDefaultImmersiveContent();
     default:
       throw new Error(`Unknown scene type: ${type}`);
   }

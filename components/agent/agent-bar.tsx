@@ -191,7 +191,7 @@ function AgentVoicePill({
                   ? `${provider.providerName} · ${group.modelName}`
                   : provider.providerName}
               </div>
-              {group.voices.map((voice) => {
+              {group.voices.map((voice, voiceIdx) => {
                 const isActive =
                   resolved.providerId === provider.providerId &&
                   resolved.voiceId === voice.id &&
@@ -200,7 +200,7 @@ function AgentVoicePill({
                 const isPreviewing = previewingId === previewKey;
                 return (
                   <div
-                    key={previewKey}
+                    key={`${previewKey}::${voiceIdx}`}
                     className={cn(
                       'flex items-center gap-1.5 rounded-sm transition-colors',
                       isActive ? 'bg-primary/10' : 'hover:bg-muted',
@@ -419,7 +419,7 @@ function TeacherVoicePill({
                   ? `${provider.providerName} · ${group.modelName}`
                   : provider.providerName}
               </div>
-              {group.voices.map((voice) => {
+              {group.voices.map((voice, voiceIdx) => {
                 const currentModelId = ttsProvidersConfig[ttsProviderId]?.modelId || '';
                 const isActive =
                   ttsProviderId === provider.providerId &&
@@ -429,7 +429,7 @@ function TeacherVoicePill({
                 const isPreviewing = previewingId === previewKey;
                 return (
                   <div
-                    key={previewKey}
+                    key={`${previewKey}::${voiceIdx}`}
                     className={cn(
                       'flex items-center gap-1.5 rounded-sm transition-colors',
                       isActive ? 'bg-primary/10' : 'hover:bg-muted',
@@ -509,9 +509,12 @@ export function AgentBar() {
 
   const allAgents = listAgents();
   const agents = allAgents.filter((a) => !a.isGenerated);
-  const teacherAgent = agents.find((a) => a.role === 'teacher');
+  const teacherAgents = agents.filter((a) => a.role === 'teacher');
+  const teacherAgent =
+    teacherAgents.find((a) => selectedAgentIds.includes(a.id)) || teacherAgents[0];
   const selectedAgents = agents.filter((a) => selectedAgentIds.includes(a.id));
   const nonTeacherSelected = selectedAgents.filter((a) => a.role !== 'teacher');
+  const [teacherPickerOpen, setTeacherPickerOpen] = useState(false);
 
   const serverProviders = getAvailableProvidersWithVoices(ttsProvidersConfig);
   const availableProviders: ProviderWithVoices[] = [
@@ -564,6 +567,16 @@ export function AgentBar() {
         presetIds.length > 0 ? presetIds : ['default-1', 'default-2', 'default-3'],
       );
     }
+  };
+
+  const selectTeacher = (teacherId: string) => {
+    // Replace current teacher in selectedAgentIds with the new one
+    const otherIds = selectedAgentIds.filter((id) => {
+      const a = agents.find((agent) => agent.id === id);
+      return a?.role !== 'teacher';
+    });
+    setSelectedAgentIds([teacherId, ...otherIds]);
+    setTeacherPickerOpen(false);
   };
 
   const toggleAgent = (agentId: string) => {
@@ -732,27 +745,77 @@ export function AgentBar() {
             className="absolute right-0 top-full mt-1 z-50 w-96"
           >
             <div className="rounded-2xl bg-white/95 dark:bg-slate-800/95 backdrop-blur-sm ring-1 ring-black/[0.04] dark:ring-white/[0.06] shadow-[0_1px_8px_-2px_rgba(0,0,0,0.06)] dark:shadow-[0_1px_8px_-2px_rgba(0,0,0,0.3)] px-2 py-1.5">
-              {/* Teacher — always visible */}
+              {/* Teacher — selectable when multiple teachers available */}
               {teacherAgent && (
-                <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-primary/5 mb-2">
+                <div className="relative mb-2">
                   <div
-                    className="size-7 rounded-full overflow-hidden shrink-0 ring-1 ring-border/40"
-                    style={{ boxShadow: `0 0 0 2px ${teacherAgent.color}30` }}
+                    className={cn(
+                      'flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-primary/5',
+                      teacherAgents.length > 1 && 'cursor-pointer hover:bg-primary/10 transition-colors',
+                    )}
+                    onClick={() => teacherAgents.length > 1 && setTeacherPickerOpen(!teacherPickerOpen)}
                   >
-                    <img
-                      src={teacherAgent.avatar}
-                      alt={getAgentName(teacherAgent)}
-                      className="size-full object-cover"
-                    />
+                    <div
+                      className="size-7 rounded-full overflow-hidden shrink-0 ring-1 ring-border/40"
+                      style={{ boxShadow: `0 0 0 2px ${teacherAgent.color}30` }}
+                    >
+                      <img
+                        src={teacherAgent.avatar}
+                        alt={getAgentName(teacherAgent)}
+                        className="size-full object-cover"
+                      />
+                    </div>
+                    <span className="text-[13px] font-medium truncate min-w-0 flex-1">
+                      {getAgentName(teacherAgent)}
+                    </span>
+                    {teacherAgents.length > 1 && (
+                      <ChevronDown className={cn(
+                        'size-3 text-muted-foreground/50 transition-transform shrink-0',
+                        teacherPickerOpen && 'rotate-180',
+                      )} />
+                    )}
+                    {showVoice && (
+                      <TeacherVoicePill
+                        availableProviders={availableProviders}
+                        disabled={!ttsEnabled}
+                      />
+                    )}
                   </div>
-                  <span className="text-[13px] font-medium truncate min-w-0 flex-1">
-                    {getAgentName(teacherAgent)}
-                  </span>
-                  {showVoice && (
-                    <TeacherVoicePill
-                      availableProviders={availableProviders}
-                      disabled={!ttsEnabled}
-                    />
+                  {teacherPickerOpen && teacherAgents.length > 1 && (
+                    <div className="mt-1 rounded-lg border bg-background/95 backdrop-blur-sm shadow-sm overflow-hidden">
+                      {teacherAgents.map((ta) => {
+                        const isActive = ta.id === teacherAgent.id;
+                        return (
+                          <div
+                            key={ta.id}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              selectTeacher(ta.id);
+                            }}
+                            className={cn(
+                              'flex items-center gap-2 px-2.5 py-1.5 cursor-pointer transition-colors',
+                              isActive ? 'bg-primary/10' : 'hover:bg-muted/60',
+                            )}
+                          >
+                            <div
+                              className="size-6 rounded-full overflow-hidden shrink-0 ring-1 ring-border/40"
+                              style={{ boxShadow: isActive ? `0 0 0 2px ${ta.color}30` : undefined }}
+                            >
+                              <img src={ta.avatar} alt={getAgentName(ta)} className="size-full object-cover" />
+                            </div>
+                            <span className={cn(
+                              'text-[12px] truncate min-w-0 flex-1',
+                              isActive ? 'font-medium text-primary' : 'text-foreground',
+                            )}>
+                              {getAgentName(ta)}
+                            </span>
+                            {isActive && (
+                              <div className="size-1.5 rounded-full bg-primary shrink-0" />
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
                   )}
                 </div>
               )}

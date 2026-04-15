@@ -94,6 +94,7 @@ export function SceneSidebar({
       quiz: PieChart,
       interactive: MousePointer2,
       pbl: Cpu,
+      immersive: Globe,
     };
     return icons[type] || BookOpen;
   };

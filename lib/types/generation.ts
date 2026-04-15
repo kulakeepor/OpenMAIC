@@ -61,7 +61,7 @@ export interface UserRequirements {
  */
 export interface SceneOutline {
   id: string;
-  type: 'slide' | 'quiz' | 'interactive' | 'pbl';
+  type: 'slide' | 'quiz' | 'interactive' | 'pbl' | 'immersive';
   title: string;
   description: string; // 1-2 sentences describing the purpose
   keyPoints: string[]; // 3-5 core key points
@@ -145,6 +145,17 @@ export interface ScientificModel {
 export interface GeneratedInteractiveContent {
   html: string;
   scientificModel?: ScientificModel;
+}
+
+/**
+ * AI-generated immersive content
+ */
+export interface GeneratedImmersiveContent {
+  sceneImagePrompt: string;
+  sceneImageUrl?: string;
+  narrativeText: string;
+  historicalContext?: string;
+  keyFormulas?: string[];
 }
 
 // ==================== Legacy Types (for compatibility) ====================

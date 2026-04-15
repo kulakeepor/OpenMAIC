@@ -161,6 +161,13 @@ export interface DiscussionAction extends ActionBase {
   agentId?: string;
 }
 
+/** Narrate — scene narration for immersive mode */
+export interface NarrateAction extends ActionBase {
+  type: 'narrate';
+  text: string;
+  highlight?: string;  // 可选高亮关键词
+}
+
 // ==================== Union type ====================
 
 export type Action =
@@ -178,7 +185,8 @@ export type Action =
   | WbClearAction
   | WbDeleteAction
   | WbCloseAction
-  | DiscussionAction;
+  | DiscussionAction
+  | NarrateAction;
 
 export type ActionType = Action['type'];
 
