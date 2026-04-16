@@ -477,6 +477,16 @@ export function InterviewChat({ topic, onComplete, onSkip }: InterviewChatProps)
     if (!assistantDraft) return session.messages;
     return [...session.messages, createTurn('assistant', assistantDraft)];
   }, [assistantDraft, session.messages]);
+  const hasAssistantQuestion = useMemo(
+    () => allMessages.some((message) => message.role === 'assistant'),
+    [allMessages],
+  );
+  const isBootstrappingFirstQuestion =
+    draftReady &&
+    !restoredDraftRef.current &&
+    !hasAssistantQuestion &&
+    isAiThinking &&
+    !assistantDraft;
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-border/60 bg-white/80 shadow-[0_10px_40px_rgba(0,0,0,0.04)] backdrop-blur-xl dark:bg-slate-950/70">
@@ -513,6 +523,22 @@ export function InterviewChat({ topic, onComplete, onSkip }: InterviewChatProps)
 
       <ScrollArea className="min-h-0 flex-1">
         <div className="space-y-4 px-4 py-5 md:px-5">
+          {isBootstrappingFirstQuestion && (
+            <motion.div
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="rounded-2xl border border-dashed border-primary/20 bg-primary/5 px-4 py-4"
+            >
+              <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                <Loader2 className="size-4 animate-spin text-primary" />
+                AI 老师正在生成第一个访谈问题
+              </div>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                访谈会先由 AI 抛出第一个问题，再由你逐步回答。请稍等片刻。
+              </p>
+            </motion.div>
+          )}
+
           <AnimatePresence initial={false}>
             {allMessages.map((message, index) => {
               const isAssistant = message.role === 'assistant';
@@ -565,7 +591,7 @@ export function InterviewChat({ topic, onComplete, onSkip }: InterviewChatProps)
               <Card size="sm" className="gap-0 rounded-tl-sm px-0 py-0">
                 <div className="flex items-center gap-2 px-4 py-3 text-sm text-muted-foreground">
                   <Loader2 className="size-4 animate-spin" />
-                  <span>正在整理问题…</span>
+                  <span>{hasAssistantQuestion ? 'AI 老师正在整理下一问…' : 'AI 老师正在生成第一个问题…'}</span>
                 </div>
               </Card>
             </motion.div>
@@ -604,11 +630,15 @@ export function InterviewChat({ topic, onComplete, onSkip }: InterviewChatProps)
             onChange={(event) => setInput(event.target.value)}
             onKeyDown={handleInputKeyDown}
             placeholder={
-              parsedResult || session.status === 'summarizing'
+              isBootstrappingFirstQuestion
+                ? '请等待 AI 老师先提出第一个问题...'
+                : parsedResult || session.status === 'summarizing'
                 ? '如果需要修改，请补充说明你的调整意见'
-                : '输入你的回答...'
+                : hasAssistantQuestion
+                  ? '请回答上方问题...'
+                  : '等待 AI 老师发问...'
             }
-            disabled={isAiThinking}
+            disabled={isAiThinking || isBootstrappingFirstQuestion}
           />
           <Button
             onClick={handleSend}

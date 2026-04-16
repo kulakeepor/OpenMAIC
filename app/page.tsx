@@ -570,11 +570,9 @@ function HomePage() {
               </button>
             </div>
 
-            <div className="px-4 pb-4 -mt-1 flex items-center gap-2 text-[11px] text-muted-foreground/55">
-              <span className="inline-flex size-4 items-center justify-center rounded-full bg-violet-500/10 text-violet-500">
-                <Check className="size-2.5" />
-              </span>
-              <span>点击“进入课堂”后将先进入课堂设计访谈，再开始正式生成。</span>
+            <div className="mx-4 mb-4 -mt-1 rounded-xl border border-border/50 bg-muted/35 px-3 py-2.5 text-[11px] text-muted-foreground/80">
+              <span className="font-medium text-foreground/80">生成流程</span>
+              <span className="ml-2">进入课堂后会先进行课堂设计访谈，再开始正式生成。</span>
             </div>
           </div>
         </motion.div>
