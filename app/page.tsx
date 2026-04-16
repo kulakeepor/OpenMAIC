@@ -285,6 +285,7 @@ function HomePage() {
       const sessionState = {
         sessionId: nanoid(),
         requirements,
+        originalRequirement: form.requirement,
         pdfText: '',
         pdfImages: [],
         imageStorageIds: [],
@@ -297,7 +298,7 @@ function HomePage() {
       };
       sessionStorage.setItem('generationSession', JSON.stringify(sessionState));
 
-      router.push('/generation-preview');
+      router.push('/interview');
     } catch (err) {
       log.error('Error preparing generation:', err);
       setError(err instanceof Error ? err.message : t('upload.generateFailed'));
@@ -541,6 +542,13 @@ function HomePage() {
                 <span className="text-xs font-medium">{t('toolbar.enterClassroom')}</span>
                 <ArrowUp className="size-3.5" />
               </button>
+            </div>
+
+            <div className="px-4 pb-4 -mt-1 flex items-center gap-2 text-[11px] text-muted-foreground/55">
+              <span className="inline-flex size-4 items-center justify-center rounded-full bg-violet-500/10 text-violet-500">
+                <Check className="size-2.5" />
+              </span>
+              <span>点击“进入课堂”后将先进入课堂设计访谈，再开始正式生成。</span>
             </div>
           </div>
         </motion.div>
