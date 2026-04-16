@@ -31,10 +31,19 @@ type InterviewApiEvent =
       type?: string;
       data?: unknown;
       content?: string;
+      delta?: string;
+      done?: boolean;
       result?: InterviewResult;
     };
 
 const DEFAULT_TOTAL_ROUNDS = 8;
+const INTERVIEW_DRAFT_STORAGE_PREFIX = 'interviewDraft:';
+
+interface InterviewDraftState {
+  session: InterviewSession;
+  input: string;
+  parsedResult: InterviewResult | null;
+}
 
 function createInitialSession(topic: string): InterviewSession {
   return {
@@ -105,6 +114,7 @@ function formatCollectedInfo(collectedInfo: InterviewSession['collectedInfo']): 
 function extractEventText(event: InterviewApiEvent): string | null {
   if (typeof event === 'string') return event;
   if (typeof event.content === 'string') return event.content;
+  if (typeof event.delta === 'string') return event.delta;
   if (
     event.type === 'text_delta' &&
     event.data &&
@@ -126,24 +136,75 @@ function extractEventText(event: InterviewApiEvent): string | null {
   return null;
 }
 
+function getInterviewDraftStorageKey(topic: string): string {
+  return `${INTERVIEW_DRAFT_STORAGE_PREFIX}${topic}`;
+}
+
+function loadInterviewDraft(topic: string): InterviewDraftState | null {
+  if (typeof window === 'undefined') return null;
+
+  const raw = sessionStorage.getItem(getInterviewDraftStorageKey(topic));
+  if (!raw) return null;
+
+  try {
+    return JSON.parse(raw) as InterviewDraftState;
+  } catch {
+    return null;
+  }
+}
+
 export function InterviewChat({ topic, onComplete, onSkip }: InterviewChatProps) {
+  const restoredDraftRef = useRef<InterviewDraftState | null>(null);
   const [session, setSession] = useState<InterviewSession>(() => createInitialSession(topic));
   const [input, setInput] = useState('');
   const [isAiThinking, setIsAiThinking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [parsedResult, setParsedResult] = useState<InterviewResult | null>(null);
   const [assistantDraft, setAssistantDraft] = useState('');
+  const [draftReady, setDraftReady] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
   const hasBootstrappedRef = useRef(false);
   const scrollAnchorRef = useRef<HTMLDivElement | null>(null);
+  const draftStorageKey = useMemo(() => getInterviewDraftStorageKey(topic), [topic]);
 
   useEffect(() => {
     scrollAnchorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }, [session.messages, assistantDraft, parsedResult]);
 
   useEffect(() => {
+    const restoredDraft = loadInterviewDraft(topic);
+    restoredDraftRef.current = restoredDraft;
+
+    if (restoredDraft) {
+      setSession(restoredDraft.session);
+      setInput(restoredDraft.input);
+      setParsedResult(restoredDraft.parsedResult);
+    }
+
+    setDraftReady(true);
+  }, [topic]);
+
+  useEffect(() => {
+    if (!draftReady || typeof window === 'undefined') return;
+
+    const draftPayload: InterviewDraftState = {
+      session,
+      input,
+      parsedResult,
+    };
+    sessionStorage.setItem(draftStorageKey, JSON.stringify(draftPayload));
+  }, [draftReady, draftStorageKey, input, parsedResult, session]);
+
+  useEffect(() => {
+    if (!draftReady) return;
     if (hasBootstrappedRef.current) return;
     hasBootstrappedRef.current = true;
+
+    if (session.messages.length > 0 || session.result || parsedResult) {
+      return () => {
+        abortControllerRef.current?.abort();
+      };
+    }
 
     void sendInterviewMessage();
 
@@ -151,7 +212,7 @@ export function InterviewChat({ topic, onComplete, onSkip }: InterviewChatProps)
       abortControllerRef.current?.abort();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [draftReady]);
 
   const progressValue = useMemo(
     () => Math.min(100, (session.currentRound / session.totalRounds) * 100),
@@ -218,6 +279,10 @@ export function InterviewChat({ topic, onComplete, onSkip }: InterviewChatProps)
           assistantContentRef.value || '```json\n' + JSON.stringify(parsed.result, null, 2) + '\n```',
           parsed.result,
         );
+        return;
+      }
+
+      if (typeof parsed !== 'string' && parsed.done === true) {
         return;
       }
 
@@ -386,8 +451,9 @@ export function InterviewChat({ topic, onComplete, onSkip }: InterviewChatProps)
       status: 'confirmed',
       result,
     }));
+    sessionStorage.removeItem(draftStorageKey);
     onComplete(result);
-  }, [onComplete, parsedResult, session.result]);
+  }, [draftStorageKey, onComplete, parsedResult, session.result]);
 
   const handleModify = useCallback(() => {
     setParsedResult(null);
@@ -403,8 +469,9 @@ export function InterviewChat({ topic, onComplete, onSkip }: InterviewChatProps)
       ...prev,
       status: 'cancelled',
     }));
+    sessionStorage.removeItem(draftStorageKey);
     onSkip();
-  }, [onSkip]);
+  }, [draftStorageKey, onSkip]);
 
   const allMessages = useMemo(() => {
     if (!assistantDraft) return session.messages;
@@ -436,6 +503,11 @@ export function InterviewChat({ topic, onComplete, onSkip }: InterviewChatProps)
             <span>{Math.round(progressValue)}%</span>
           </div>
           <Progress value={progressValue} />
+          {restoredDraftRef.current && session.messages.length > 0 && (
+            <p className="text-xs text-muted-foreground">
+              已恢复上次未完成的访谈记录，你可以继续回答或直接确认摘要。
+            </p>
+          )}
         </div>
       </div>
 

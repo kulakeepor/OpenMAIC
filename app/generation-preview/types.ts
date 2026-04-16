@@ -6,11 +6,13 @@ import type {
   PdfImage,
   ImageMapping,
 } from '@/lib/types/generation';
+import type { InterviewResult } from '@/lib/types/interview';
 
 // Session state stored in sessionStorage
 export interface GenerationSessionState {
   sessionId: string;
   requirements: UserRequirements;
+  originalRequirement?: string;
   pdfText: string;
   pdfImages?: PdfImage[];
   imageStorageIds?: string[];
@@ -27,6 +29,9 @@ export interface GenerationSessionState {
   researchSources?: Array<{ title: string; url: string }>;
   // Language directive inferred from outline generation
   languageDirective?: string;
+  // Optional interview enrichment metadata
+  interviewResult?: InterviewResult;
+  interviewCompleted?: boolean;
 }
 
 export type GenerationStep = {

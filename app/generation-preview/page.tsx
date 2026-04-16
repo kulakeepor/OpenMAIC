@@ -3,9 +3,20 @@
 import { useEffect, useState, Suspense, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'motion/react';
-import { CheckCircle2, Sparkles, AlertCircle, AlertTriangle, ArrowLeft, Bot } from 'lucide-react';
+import {
+  CheckCircle2,
+  Sparkles,
+  AlertCircle,
+  AlertTriangle,
+  ArrowLeft,
+  Bot,
+  ChevronDown,
+  ClipboardList,
+  RotateCcw,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { useStageStore } from '@/lib/store/stage';
@@ -32,6 +43,34 @@ import { StepVisualizer } from './components/visualizers';
 
 const log = createLogger('GenerationPreview');
 
+function formatApproachLabel(approach?: string): string {
+  switch (approach) {
+    case 'historical':
+      return '历史叙事';
+    case 'experimental':
+      return '实验引入';
+    case 'derivation':
+      return '公式推导';
+    case 'problem-driven':
+      return '问题驱动';
+    case 'mixed':
+    default:
+      return '混合式';
+  }
+}
+
+function formatEngagementLabel(engagement?: string): string {
+  switch (engagement) {
+    case 'active':
+      return '积极互动';
+    case 'quiet':
+      return '安静听讲';
+    case 'mixed':
+    default:
+      return '混合型';
+  }
+}
+
 function GenerationPreviewContent() {
   const router = useRouter();
   const { t } = useI18n();
@@ -50,6 +89,7 @@ function GenerationPreviewContent() {
     [],
   );
   const [showAgentReveal, setShowAgentReveal] = useState(false);
+  const [isInterviewSummaryOpen, setIsInterviewSummaryOpen] = useState(false);
   const [generatedAgents, setGeneratedAgents] = useState<
     Array<{
       id: string;
@@ -838,6 +878,14 @@ function GenerationPreviewContent() {
     router.push('/');
   };
 
+  const revisitInterview = () => {
+    abortControllerRef.current?.abort();
+    if (session) {
+      sessionStorage.setItem('generationSession', JSON.stringify(session));
+    }
+    router.push('/interview?revisit=1');
+  };
+
   // Still loading session from sessionStorage
   if (!sessionLoaded) {
     return (
@@ -891,15 +939,121 @@ function GenerationPreviewContent() {
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="absolute top-4 left-4 z-20"
+        className="absolute top-4 left-4 z-20 flex items-center gap-2"
       >
         <Button variant="ghost" size="sm" onClick={goBackToHome}>
           <ArrowLeft className="size-4 mr-2" />
           {t('generation.backToHome')}
         </Button>
+        <Button variant="ghost" size="sm" onClick={revisitInterview}>
+          <RotateCcw className="size-4 mr-2" />
+          重新访谈
+        </Button>
       </motion.div>
 
       <div className="z-10 w-full max-w-lg space-y-8 flex flex-col items-center">
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, delay: 0.05 }}
+          className="w-full space-y-3"
+        >
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <div
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs backdrop-blur-sm',
+                session.interviewCompleted
+                  ? 'border-violet-500/20 bg-violet-500/10 text-violet-700 dark:text-violet-300'
+                  : 'border-border/60 bg-white/60 text-muted-foreground dark:bg-slate-900/60',
+              )}
+            >
+              <ClipboardList className="size-3.5" />
+              {session.interviewCompleted ? '已使用访谈增强需求' : '未使用访谈增强'}
+            </div>
+            {session.interviewCompleted && session.interviewResult && (
+              <div className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-xs text-emerald-700 backdrop-blur-sm dark:text-emerald-300">
+                <Sparkles className="size-3.5" />
+                {session.interviewResult.learningObjectives.length} 项教学目标已纳入生成
+              </div>
+            )}
+          </div>
+
+          {session.interviewCompleted && session.interviewResult ? (
+            <Collapsible
+              open={isInterviewSummaryOpen}
+              onOpenChange={setIsInterviewSummaryOpen}
+              className="mx-auto w-full max-w-xl"
+            >
+              <div className="rounded-2xl border border-white/10 bg-white/70 p-3 shadow-lg shadow-black/5 backdrop-blur-sm dark:bg-slate-900/60">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="space-y-1 text-left">
+                    <p className="text-sm font-medium text-foreground">访谈摘要已注入本次生成</p>
+                    <p className="text-xs text-muted-foreground">
+                      已整理 {session.interviewResult.learningObjectives.length} 项目标，学生水平为{' '}
+                      {session.interviewResult.studentLevel}。
+                    </p>
+                  </div>
+                  <CollapsibleTrigger asChild>
+                    <Button variant="ghost" size="sm" className="shrink-0">
+                      查看摘要
+                      <ChevronDown
+                        className={cn(
+                          'ml-1 size-4 transition-transform duration-200',
+                          isInterviewSummaryOpen && 'rotate-180',
+                        )}
+                      />
+                    </Button>
+                  </CollapsibleTrigger>
+                </div>
+
+                <CollapsibleContent className="overflow-hidden data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down">
+                  <div className="mt-3 grid gap-3 text-left md:grid-cols-2">
+                    <div className="rounded-xl border border-border/60 bg-background/80 p-3">
+                      <p className="text-xs font-medium text-muted-foreground">教学目标</p>
+                      <p className="mt-2 text-sm leading-6 text-foreground/90">
+                        {session.interviewResult.learningObjectives.join('；') || '未指定'}
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-border/60 bg-background/80 p-3">
+                      <p className="text-xs font-medium text-muted-foreground">重难点</p>
+                      <p className="mt-2 text-sm leading-6 text-foreground/90">
+                        {session.interviewResult.keyDifficulties.join('；') || '未指定'}
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-border/60 bg-background/80 p-3">
+                      <p className="text-xs font-medium text-muted-foreground">学生画像</p>
+                      <p className="mt-2 text-sm leading-6 text-foreground/90">
+                        {session.interviewResult.studentLevel} /{' '}
+                        {formatEngagementLabel(session.interviewResult.engagementStyle)}
+                      </p>
+                      <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                        先修知识：{session.interviewResult.prerequisites.join('、') || '未指定'}
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-border/60 bg-background/80 p-3">
+                      <p className="text-xs font-medium text-muted-foreground">教学策略</p>
+                      <p className="mt-2 text-sm leading-6 text-foreground/90">
+                        {formatApproachLabel(session.interviewResult.preferredApproach)} /{' '}
+                        {session.interviewResult.duration} 分钟
+                      </p>
+                      <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                        时间分配：引入 {session.interviewResult.timeAllocation.conceptIntroduction}% /
+                        讲解 {session.interviewResult.timeAllocation.coreExplanation}% / 讨论{' '}
+                        {session.interviewResult.timeAllocation.practiceAndDiscussion}% / 测评{' '}
+                        {session.interviewResult.timeAllocation.assessment}%
+                      </p>
+                    </div>
+                  </div>
+                </CollapsibleContent>
+              </div>
+            </Collapsible>
+          ) : (
+            <div className="mx-auto w-full max-w-xl rounded-2xl border border-dashed border-border/60 bg-white/60 px-4 py-3 text-center text-sm text-muted-foreground backdrop-blur-sm dark:bg-slate-900/50">
+              当前按原始需求直接生成。若想先补齐教学目标、学生画像和课堂策略，可点击左上角“重新访谈”。
+            </div>
+          )}
+        </motion.div>
+
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
