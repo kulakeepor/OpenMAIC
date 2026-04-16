@@ -50,6 +50,10 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useDraftCache } from '@/lib/hooks/use-draft-cache';
 import { SpeechButton } from '@/components/audio/speech-button';
 import { useImportClassroom } from '@/lib/import/use-import-classroom';
+import { InterviewChat } from '@/components/interview/interview-chat';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { buildEnhancedRequirement } from '@/lib/interview/interview-utils';
+import type { InterviewResult } from '@/lib/types/interview';
 
 const log = createLogger('Home');
 
@@ -124,6 +128,10 @@ function HomePage() {
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const toolbarRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Interview dialog state
+  const [interviewOpen, setInterviewOpen] = useState(false);
+  const [interviewResult, setInterviewResult] = useState<InterviewResult | null>(null);
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -252,11 +260,15 @@ function HomePage() {
     }
 
     setError(null);
+    // Open interview dialog instead of directly navigating
+    setInterviewOpen(true);
+  };
 
+  const proceedToGeneration = async (enhancedRequirement?: string) => {
     try {
       const userProfile = useUserProfileStore.getState();
       const requirements: UserRequirements = {
-        requirement: form.requirement,
+        requirement: enhancedRequirement || form.requirement,
         userNickname: userProfile.nickname || undefined,
         userBio: userProfile.bio || undefined,
         webSearch: form.webSearch || undefined,
@@ -302,6 +314,20 @@ function HomePage() {
       log.error('Error preparing generation:', err);
       setError(err instanceof Error ? err.message : t('upload.generateFailed'));
     }
+  };
+
+  const handleInterviewComplete = (result: InterviewResult) => {
+    setInterviewResult(result);
+    setInterviewOpen(false);
+    // Use enhanced requirement from interview
+    const enhancedRequirement = buildEnhancedRequirement(result);
+    void proceedToGeneration(enhancedRequirement);
+  };
+
+  const handleInterviewSkip = () => {
+    setInterviewOpen(false);
+    // Proceed with original requirement
+    void proceedToGeneration();
   };
 
   const formatDate = (timestamp: number) => {
@@ -666,6 +692,20 @@ function HomePage() {
       <div className="mt-auto pt-12 pb-4 text-center text-xs text-muted-foreground/40">
         OpenMAIC Open Source Project
       </div>
+
+      {/* Interview Dialog */}
+      <Dialog open={interviewOpen} onOpenChange={setInterviewOpen}>
+        <DialogContent className="h-[80vh] max-h-[600px] w-[95vw] max-w-[800px] p-0 overflow-hidden">
+          <DialogTitle className="sr-only">课堂设计访谈</DialogTitle>
+          {form.requirement.trim() && (
+            <InterviewChat
+              topic={form.requirement}
+              onComplete={handleInterviewComplete}
+              onSkip={handleInterviewSkip}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

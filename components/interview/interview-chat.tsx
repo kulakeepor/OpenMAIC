@@ -309,6 +309,7 @@ export function InterviewChat({ topic, onComplete, onSkip }: InterviewChatProps)
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'x-model': 'glm:glm-4.7',
           },
           body: JSON.stringify({
             sessionId: session.id,

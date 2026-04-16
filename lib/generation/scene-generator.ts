@@ -27,6 +27,12 @@ import { buildPrompt, PROMPT_IDS } from './prompts';
 import { postProcessInteractiveHtml } from './interactive-post-processor';
 import { parseActionsFromStructuredOutput } from './action-parser';
 import { parseJsonResponse } from './json-repair';
+import { generateImage, IMAGE_PROVIDERS } from '@/lib/media/image-providers';
+import type {
+  ImageGenerationConfig,
+  ImageGenerationOptions,
+  ImageProviderId,
+} from '@/lib/media/types';
 import {
   buildCourseContext,
   buildLanguageText,
@@ -933,7 +939,72 @@ async function generateImmersiveContent(
   }
 
   log.debug(`Got immersive content for: ${outline.title}`);
+
+  // Generate scene image from prompt
+  if (generatedData.sceneImagePrompt) {
+    try {
+      const imageUrl = await generateSceneImage(generatedData.sceneImagePrompt);
+      if (imageUrl) {
+        generatedData.sceneImageUrl = imageUrl;
+        log.debug(`Generated scene image for: ${outline.title}`);
+      }
+    } catch (error) {
+      log.warn(`Failed to generate scene image for "${outline.title}": ${error}`);
+      // Continue without image - sceneImageUrl will be undefined
+    }
+  }
+
   return generatedData;
+}
+
+/**
+ * Generate scene image using configured image provider
+ *
+ * Reads configuration from environment variables:
+ * - IMAGE_PROVIDER: provider ID (default: 'qwen-image')
+ * - IMAGE_PROVIDER_API_KEY: API key for the provider
+ * - GLM_API_KEY: Fallback key for cogview provider
+ */
+async function generateSceneImage(prompt: string): Promise<string | null> {
+  const providerId = (process.env.IMAGE_PROVIDER as ImageProviderId) || 'qwen-image';
+  const provider = IMAGE_PROVIDERS[providerId];
+
+  if (!provider) {
+    log.warn(`Unknown image provider: ${providerId}`);
+    return null;
+  }
+
+  // Get API key based on provider
+  let apiKey = process.env.IMAGE_PROVIDER_API_KEY;
+  if (!apiKey && providerId === 'cogview') {
+    apiKey = process.env.GLM_API_KEY;
+  }
+
+  if (!apiKey) {
+    log.warn(`No API key configured for image provider: ${providerId}`);
+    return null;
+  }
+
+  const config: ImageGenerationConfig = {
+    providerId,
+    apiKey,
+    model: provider.models[0]?.id,
+  };
+
+  const options: ImageGenerationOptions = {
+    prompt,
+    aspectRatio: '16:9',
+    width: 1280,
+    height: 720,
+  };
+
+  try {
+    const result = await generateImage(config, options);
+    return result.url || null;
+  } catch (error) {
+    log.warn(`Image generation failed with provider ${providerId}:`, error);
+    return null;
+  }
 }
 
 /**

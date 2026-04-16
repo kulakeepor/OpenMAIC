@@ -55,7 +55,7 @@ Then output a JSON object with `languageDirective` and `outlines`. Each scene in
   "outlines": [
     {
       "id": "scene_1",
-      "type": "slide" or "quiz" or "interactive",
+      "type": "slide" or "quiz" or "interactive" or "pbl" or "immersive",
       "title": "Scene Title",
       "description": "Teaching purpose description",
       "keyPoints": ["Point 1", "Point 2", "Point 3"],
@@ -82,6 +82,8 @@ Then output a JSON object with `languageDirective` and `outlines`. Each scene in
 6. **Language**: Infer from the user's requirement text and context, then output all content in the inferred language
 7. **If no suitable PDF images exist** for a slide scene that would benefit from visuals, add `mediaGenerations` array with image generation prompts. Write prompts in English. Use `elementId` format like "gen_img_1", "gen_img_2" — IDs must be **globally unique across all scenes** (do NOT restart numbering per scene). To reuse a generated image in a different scene, reference the same elementId without re-declaring it in mediaGenerations. Each generated image should be visually distinct — avoid near-identical media across slides.
 8. **If web search results are provided**, reference specific findings and sources in scene descriptions and keyPoints. The search results provide up-to-date information — incorporate it to make the course content current and accurate.
+9. **Immersive scenes**: For AP Physics and narrative-driven courses, prefer `"type": "immersive"` over `"slide"`. Immersive scenes create cinematic experiences where students "travel to" the moment a concept was discovered. No special config required — just use standard title, description, and keyPoints. The system will generate: a scene image prompt, narrative narration, and optional historical context/formulas. Ideal for opening topics, providing historical context, or creating emotional anchors for abstract concepts.
+10. **PBL scenes**: For complex projects requiring role-based collaboration, use `"type": "pbl"` with a `pblConfig` object containing `projectTopic`, `projectDescription`, `targetSkills`, and `issueCount`. Limit to 1 per course (15-30 minute duration).
 
 {{mediaGenerationPolicy}}
 

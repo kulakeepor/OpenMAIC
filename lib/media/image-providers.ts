@@ -17,6 +17,7 @@ import {
   testMiniMaxImageConnectivity,
 } from './adapters/minimax-image-adapter';
 import { generateWithGrokImage, testGrokImageConnectivity } from './adapters/grok-image-adapter';
+import { generateWithCogview, testCogviewConnectivity } from './adapters/cogview-adapter';
 
 export const IMAGE_PROVIDERS: Record<ImageProviderId, ImageProviderConfig> = {
   seedream: {
@@ -93,6 +94,17 @@ export const IMAGE_PROVIDERS: Record<ImageProviderId, ImageProviderConfig> = {
     ],
     supportedAspectRatios: ['16:9', '4:3', '1:1', '9:16'],
   },
+  cogview: {
+    id: 'cogview',
+    name: 'CogView (Zhipu AI)',
+    requiresApiKey: true,
+    defaultBaseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+    models: [
+      { id: 'cogview-4', name: 'CogView 4' },
+      { id: 'cogview-3-plus', name: 'CogView 3 Plus' },
+    ],
+    supportedAspectRatios: ['16:9', '4:3', '1:1', '9:16'],
+  },
 };
 
 export async function testImageConnectivity(
@@ -109,6 +121,8 @@ export async function testImageConnectivity(
       return testMiniMaxImageConnectivity(config);
     case 'grok-image':
       return testGrokImageConnectivity(config);
+    case 'cogview':
+      return testCogviewConnectivity(config);
     default:
       return {
         success: false,
@@ -132,6 +146,8 @@ export async function generateImage(
       return generateWithMiniMaxImage(config, options);
     case 'grok-image':
       return generateWithGrokImage(config, options);
+    case 'cogview':
+      return generateWithCogview(config, options);
     default:
       throw new Error(`Unsupported image provider: ${config.providerId}`);
   }
