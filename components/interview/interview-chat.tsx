@@ -15,6 +15,7 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Progress } from '@/components/ui/progress';
+import { useSettingsStore } from '@/lib/store/settings';
 import { cn } from '@/lib/utils';
 import type { InterviewResult, InterviewSession, InterviewTurn } from '@/lib/types/interview';
 import { InterviewSummaryCard } from './interview-summary-card';
@@ -136,6 +137,20 @@ function extractEventText(event: InterviewApiEvent): string | null {
   return null;
 }
 
+function extractEventError(event: InterviewApiEvent): string | null {
+  if (typeof event === 'string') return null;
+  if (
+    event.type === 'error' &&
+    event.data &&
+    typeof event.data === 'object' &&
+    'message' in event.data &&
+    typeof (event.data as { message: unknown }).message === 'string'
+  ) {
+    return (event.data as { message: string }).message;
+  }
+  return null;
+}
+
 function getInterviewDraftStorageKey(topic: string): string {
   return `${INTERVIEW_DRAFT_STORAGE_PREFIX}${topic}`;
 }
@@ -147,10 +162,29 @@ function loadInterviewDraft(topic: string): InterviewDraftState | null {
   if (!raw) return null;
 
   try {
-    return JSON.parse(raw) as InterviewDraftState;
+    const parsed = JSON.parse(raw) as InterviewDraftState;
+    const hasAssistantMessage = parsed.session.messages.some((message) => message.role === 'assistant');
+    if (!hasAssistantMessage) {
+      sessionStorage.removeItem(getInterviewDraftStorageKey(topic));
+      return null;
+    }
+    return parsed;
   } catch {
     return null;
   }
+}
+
+function getInterviewModelHeaders(): Record<string, string> {
+  const settings = useSettingsStore.getState();
+  const glmConfig = settings.providersConfig.glm;
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'x-model': 'glm:glm-4.7',
+    'x-api-key': glmConfig?.apiKey || '',
+  };
+  if (glmConfig?.baseUrl) headers['x-base-url'] = glmConfig.baseUrl;
+  if (glmConfig?.type) headers['x-provider-type'] = glmConfig.type;
+  return headers;
 }
 
 export function InterviewChat({ topic, onComplete, onSkip }: InterviewChatProps) {
@@ -286,6 +320,12 @@ export function InterviewChat({ topic, onComplete, onSkip }: InterviewChatProps)
         return;
       }
 
+      const errorMessage = extractEventError(parsed);
+      if (errorMessage) {
+        setError(errorMessage);
+        return;
+      }
+
       const text = extractEventText(parsed);
       if (text) {
         assistantContentRef.value += text;
@@ -298,10 +338,11 @@ export function InterviewChat({ topic, onComplete, onSkip }: InterviewChatProps)
   const readSSEStream = useCallback(
     async (response: Response) => {
       const reader = response.body?.getReader();
-      if (!reader) return '';
+      if (!reader) return { text: '', hasError: false };
 
       const decoder = new TextDecoder();
       const assistantContentRef = { value: '' };
+      let hasError = false;
       let sseBuffer = '';
 
       while (true) {
@@ -319,7 +360,19 @@ export function InterviewChat({ topic, onComplete, onSkip }: InterviewChatProps)
             .map((line) => line.replace(/^data:\s?/, ''));
 
           if (lines.length === 0) continue;
+          const beforeText = assistantContentRef.value;
           handleSSEPayload(lines.join('\n'), assistantContentRef);
+          if (beforeText === assistantContentRef.value && !assistantContentRef.value) {
+            let parsed: InterviewApiEvent = lines.join('\n');
+            try {
+              parsed = JSON.parse(lines.join('\n')) as InterviewApiEvent;
+            } catch {
+              parsed = lines.join('\n');
+            }
+            if (extractEventError(parsed)) {
+              hasError = true;
+            }
+          }
         }
       }
 
@@ -335,11 +388,21 @@ export function InterviewChat({ topic, onComplete, onSkip }: InterviewChatProps)
           .map((line) => line.replace(/^data:\s?/, ''));
 
         if (lines.length > 0) {
-          handleSSEPayload(lines.join('\n'), assistantContentRef);
+          const payload = lines.join('\n');
+          handleSSEPayload(payload, assistantContentRef);
+          let parsed: InterviewApiEvent = payload;
+          try {
+            parsed = JSON.parse(payload) as InterviewApiEvent;
+          } catch {
+            parsed = payload;
+          }
+          if (extractEventError(parsed)) {
+            hasError = true;
+          }
         }
       }
 
-      return assistantContentRef.value;
+      return { text: assistantContentRef.value, hasError };
     },
     [handleSSEPayload],
   );
@@ -372,10 +435,7 @@ export function InterviewChat({ topic, onComplete, onSkip }: InterviewChatProps)
       try {
         const response = await fetch('/api/interview/chat', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-model': 'glm:glm-4.7',
-          },
+          headers: getInterviewModelHeaders(),
           body: JSON.stringify({
             sessionId: session.id,
             topic,
@@ -393,9 +453,12 @@ export function InterviewChat({ topic, onComplete, onSkip }: InterviewChatProps)
         }
 
         let finalAssistantContent = '';
+        let streamHadError = false;
 
         if (response.headers.get('content-type')?.includes('text/event-stream')) {
-          finalAssistantContent = await readSSEStream(response);
+          const streamResult = await readSSEStream(response);
+          finalAssistantContent = streamResult.text;
+          streamHadError = streamResult.hasError;
         } else {
           finalAssistantContent = await response.text();
           setAssistantDraft(finalAssistantContent);
@@ -403,6 +466,8 @@ export function InterviewChat({ topic, onComplete, onSkip }: InterviewChatProps)
 
         if (finalAssistantContent.trim()) {
           finalizeAssistantMessage(finalAssistantContent);
+        } else if (!streamHadError) {
+          setError('AI 老师暂时没有返回内容，请重试一次。');
         }
       } catch (err) {
         if ((err as Error).name === 'AbortError') return;
