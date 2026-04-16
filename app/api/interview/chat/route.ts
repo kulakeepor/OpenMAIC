@@ -11,13 +11,13 @@
  */
 
 import { NextRequest } from 'next/server';
-import { streamLLM } from '@/lib/ai/llm';
+import { callLLM } from '@/lib/ai/llm';
 import { buildInterviewSystemPrompt } from '@/lib/interview/interview-prompts';
 import { isProviderKeyRequired } from '@/lib/ai/providers';
 import type { InterviewTurn } from '@/lib/types/interview';
 import { apiError } from '@/lib/server/api-response';
 import { createLogger } from '@/lib/logger';
-import { resolveModelFromHeaders } from '@/lib/server/resolve-model';
+import { resolveModel } from '@/lib/server/resolve-model';
 import type { ThinkingConfig } from '@/lib/types/provider';
 
 const log = createLogger('Interview Chat API');
@@ -67,14 +67,22 @@ export async function POST(req: NextRequest) {
       return apiError('INVALID_REQUEST', 400, 'Invalid currentRound: must be a positive number');
     }
 
-    // Resolve model from headers
-    const { model: languageModel, apiKey, providerId } = await resolveModelFromHeaders(req);
+    // Interview flow is pinned to GLM to keep behavior stable and avoid
+    // inheriting unrelated global model selections from the rest of the app.
+    const { model: languageModel, apiKey, providerId, modelString } = await resolveModel({
+      modelString: 'glm:glm-4.7',
+      apiKey: req.headers.get('x-api-key') || undefined,
+      baseUrl: req.headers.get('x-base-url') || undefined,
+      providerType: req.headers.get('x-provider-type') || undefined,
+    });
 
     if (isProviderKeyRequired(providerId) && !apiKey) {
-      return apiError('MISSING_API_KEY', 401, 'API Key is required');
+      return apiError('MISSING_API_KEY', 401, 'GLM API Key is required for interview chat');
     }
 
-    log.info(`Processing interview chat request: topic="${body.topic}", round=${body.currentRound}`);
+    log.info(
+      `Processing interview chat request: topic="${body.topic}", round=${body.currentRound}, model="${modelString}", provider="${providerId}"`,
+    );
 
     // Build system prompt
     const systemPrompt = buildInterviewSystemPrompt({
@@ -89,6 +97,15 @@ export async function POST(req: NextRequest) {
         ? { role: 'assistant' as const, content: turn.content }
         : { role: 'user' as const, content: turn.content },
     );
+    const effectiveMessages =
+      llmMessages.length > 0
+        ? llmMessages
+        : [
+            {
+              role: 'user' as const,
+              content: `请开始这次关于“${body.topic}”的课堂设计访谈，先向老师提出第一个关键问题。`,
+            },
+          ];
 
     // Create SSE stream
     const { readable, writable } = new TransformStream();
@@ -120,25 +137,28 @@ export async function POST(req: NextRequest) {
 
         const thinkingConfig: ThinkingConfig = { enabled: false };
 
-        const result = streamLLM(
+        const result = await callLLM(
           {
             model: languageModel,
             system: systemPrompt,
-            messages: llmMessages,
+            messages: effectiveMessages,
             temperature: 0.7,
           },
           'interview-chat',
+          { retries: 1 },
           thinkingConfig,
         );
 
-        // Stream text deltas
-        for await (const delta of result.textStream) {
-          if (req.signal.aborted) {
-            log.info('Request was aborted');
-            break;
-          }
+        if (req.signal.aborted) {
+          log.info('Request was aborted');
+          stopHeartbeat();
+          await writer.close();
+          return;
+        }
 
-          const data = `data: ${JSON.stringify({ delta })}\n\n`;
+        const text = result.text?.trim() || '';
+        if (text) {
+          const data = `data: ${JSON.stringify({ delta: text })}\n\n`;
           await writer.write(encoder.encode(data));
         }
 
@@ -186,6 +206,11 @@ export async function POST(req: NextRequest) {
     });
   } catch (error) {
     log.error('Interview chat request failed:', error);
+
+    if (error instanceof Error && error.message.includes('API key required')) {
+      return apiError('MISSING_API_KEY', 401, 'GLM API Key is required for interview chat');
+    }
+
     return apiError(
       'INTERNAL_ERROR',
       500,

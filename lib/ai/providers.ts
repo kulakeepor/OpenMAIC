@@ -1106,11 +1106,15 @@ function getCompatThinkingBodyParams(
   return undefined;
 }
 
-function normalizeMiniMaxAnthropicBaseUrl(
+function normalizeAnthropicCompatibleBaseUrl(
   providerId: ProviderId,
   baseUrl?: string,
 ): string | undefined {
-  if (providerId !== 'minimax' || !baseUrl) {
+  if (!baseUrl) {
+    return baseUrl;
+  }
+
+  if (providerId !== 'minimax' && providerId !== 'glm') {
     return baseUrl;
   }
 
@@ -1156,7 +1160,7 @@ export function getModel(config: ModelConfig): ModelWithInfo {
   const effectiveApiKey = config.apiKey || '';
 
   // Resolve base URL: explicit > provider default > SDK default
-  const effectiveBaseUrl = normalizeMiniMaxAnthropicBaseUrl(
+  const effectiveBaseUrl = normalizeAnthropicCompatibleBaseUrl(
     config.providerId,
     config.baseUrl || provider?.defaultBaseUrl || undefined,
   );
