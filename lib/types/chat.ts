@@ -249,6 +249,18 @@ export interface DirectorState {
 }
 
 /**
+ * Immersive scene context for scene-aware chat answers.
+ */
+export interface ImmersiveContext {
+  sceneId: string;
+  narrativeText: string;
+  historicalContext?: string;
+  keyFormulas?: string[];
+  sceneImageUrl?: string;
+  sceneTitle?: string;
+}
+
+/**
  * Request body for the stateless chat API
  * All state is sent from the client on each request
  */
@@ -267,6 +279,7 @@ export interface StatelessChatRequest {
   config: {
     agentIds: string[];
     sessionType?: 'qa' | 'discussion';
+    immersiveContext?: ImmersiveContext;
     /** Discussion topic (for agent-initiated discussions) */
     discussionTopic?: string;
     /** Discussion prompt (for agent-initiated discussions) */

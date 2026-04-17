@@ -30,7 +30,14 @@ export function SceneRenderer({ scene, mode }: SceneRendererProps) {
         return <PBLRenderer content={scene.content} mode={mode} sceneId={scene.id} />;
       case 'immersive':
         if (scene.content.type !== 'immersive') return <div>Invalid immersive content</div>;
-        return <ImmersiveRenderer content={scene.content} mode={mode} sceneId={scene.id} />;
+        return (
+          <ImmersiveRenderer
+            content={scene.content}
+            mode={mode}
+            sceneId={scene.id}
+            sceneTitle={scene.title}
+          />
+        );
       default:
         return <div>Unknown scene type</div>;
     }

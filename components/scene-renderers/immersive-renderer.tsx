@@ -3,16 +3,28 @@
 import { useMemo } from 'react';
 import katex from 'katex';
 import { motion } from 'motion/react';
+import { ImmersiveChatOverlay } from '@/components/immersive/immersive-chat-overlay';
+import { useSettingsStore, useStageStore } from '@/lib/store';
+import { useAgentRegistry } from '@/lib/orchestration/registry/store';
 import type { ImmersiveContent } from '@/lib/types/stage';
 
 interface ImmersiveRendererProps {
   readonly content: ImmersiveContent;
   readonly mode: 'autonomous' | 'playback';
   readonly sceneId: string;
+  readonly sceneTitle?: string;
 }
 
-export function ImmersiveRenderer({ content, mode: _mode, sceneId: _sceneId }: ImmersiveRendererProps) {
+export function ImmersiveRenderer({
+  content,
+  mode: _mode,
+  sceneId,
+  sceneTitle,
+}: ImmersiveRendererProps) {
   const { sceneImageUrl, narrativeText, historicalContext, keyFormulas } = content;
+  const stage = useStageStore((state) => state.stage);
+  const selectedAgentIds = useSettingsStore((state) => state.selectedAgentIds);
+  const agents = useAgentRegistry((state) => state.agents);
 
   const renderedFormulas = useMemo(() => {
     if (!keyFormulas || keyFormulas.length === 0) return null;
@@ -27,6 +39,22 @@ export function ImmersiveRenderer({ content, mode: _mode, sceneId: _sceneId }: I
       }
     });
   }, [keyFormulas]);
+
+  const teacherAgent = useMemo(() => {
+    const candidateIds = [
+      ...(stage?.agentIds || []),
+      ...selectedAgentIds,
+      'default-1',
+      'default-physics-1',
+    ];
+
+    const uniqueIds = [...new Set(candidateIds)];
+    const teacherFromCandidates = uniqueIds
+      .map((agentId) => agents[agentId])
+      .find((agent) => agent?.role === 'teacher');
+
+    return teacherFromCandidates || agents['default-1'] || agents['default-physics-1'] || null;
+  }, [agents, selectedAgentIds, stage?.agentIds]);
 
   return (
     <div className="relative w-full h-full overflow-hidden">
@@ -105,6 +133,20 @@ export function ImmersiveRenderer({ content, mode: _mode, sceneId: _sceneId }: I
           </p>
         </div>
       </motion.div>
+
+      {teacherAgent && (
+        <ImmersiveChatOverlay
+          sceneId={sceneId}
+          sceneTitle={sceneTitle}
+          narrativeText={narrativeText}
+          historicalContext={historicalContext}
+          keyFormulas={keyFormulas}
+          sceneImageUrl={sceneImageUrl}
+          teacherAgentId={teacherAgent.id}
+          teacherName={teacherAgent.name}
+          teacherAvatar={teacherAgent.avatar}
+        />
+      )}
     </div>
   );
 }
