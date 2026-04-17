@@ -220,6 +220,25 @@ import type { Stage, Scene, StageMode } from '@/lib/types/stage';
 import type { AgentTurnSummary, WhiteboardActionRecord } from '@/lib/orchestration/director-prompt';
 
 /**
+ * Immersive 场景上下文
+ * 用于在 immersive 场景中提问时，将当前场景内容传递给 AI 老师
+ */
+export interface ImmersiveContext {
+  /** 当前场景 ID */
+  sceneId: string;
+  /** 场景叙述文本（底部旁白） */
+  narrativeText: string;
+  /** 历史背景标签（左上角） */
+  historicalContext?: string;
+  /** 关键公式列表 */
+  keyFormulas?: string[];
+  /** 场景背景图 URL */
+  sceneImageUrl?: string;
+  /** 场景标题 */
+  sceneTitle?: string;
+}
+
+/**
  * Accumulated director state passed between per-agent requests.
  * Client-maintained — backend is stateless.
  */
@@ -254,6 +273,8 @@ export interface StatelessChatRequest {
     discussionPrompt?: string;
     /** Which agent should speak first in a discussion */
     triggerAgentId?: string;
+    /** Immersive scene context for scene-aware responses */
+    immersiveContext?: ImmersiveContext;
     /** Full agent configs for generated (non-default) agents that aren't in the server-side registry */
     agentConfigs?: Array<{
       id: string;

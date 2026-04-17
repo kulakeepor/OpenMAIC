@@ -4,7 +4,7 @@
  * Builds system prompts and converts messages for the LLM.
  */
 
-import type { StatelessChatRequest } from '@/lib/types/chat';
+import type { StatelessChatRequest, ImmersiveContext } from '@/lib/types/chat';
 import type { AgentConfig } from '@/lib/orchestration/registry/types';
 import type { WhiteboardActionRecord, AgentTurnSummary } from './director-prompt';
 import { getActionDescriptions, getEffectiveActions } from './tool-schemas';
@@ -37,6 +37,18 @@ You are responsible for:
 - Only using the whiteboard when explicitly invited by the teacher
 You are NOT a teacher — your responses should be much shorter than the teacher's.`,
 };
+
+// ==================== Immersive Guidelines ====================
+
+const IMMERSIVE_GUIDELINES = `
+## Immersive Scene Guidelines (CRITICAL)
+When responding in an immersive scene context:
+1. Reference specific elements from the scene: narration text, historical context, or formulas shown.
+2. If the student asks about something already explained in the narration, briefly confirm and extend with a new angle.
+3. When the scene has a background image, acknowledge that students are viewing visual content.
+4. Keep answers focused on the current scene topic — don't drift to unrelated concepts.
+5. Use the formulas shown in the scene as concrete references in your explanations.
+`;
 
 // ==================== Types ====================
 
@@ -88,6 +100,7 @@ You are ${currentAgentName}, responding AFTER the agents above. You MUST:
  * @param agentConfig - The agent configuration
  * @param storeState - Current application state
  * @param discussionContext - Optional discussion context for agent-initiated discussions
+ * @param immersiveContext - Optional immersive scene context
  * @returns System prompt string
  */
 export function buildStructuredPrompt(
@@ -97,6 +110,7 @@ export function buildStructuredPrompt(
   whiteboardLedger?: WhiteboardActionRecord[],
   userProfile?: { nickname?: string; bio?: string },
   agentResponses?: AgentTurnSummary[],
+  immersiveContext?: ImmersiveContext,
 ): string {
   // Determine current scene type for action filtering
   const currentScene = storeState.currentSceneId
@@ -109,7 +123,7 @@ export function buildStructuredPrompt(
   const actionDescriptions = getActionDescriptions(effectiveActions);
 
   // Build context about current state
-  const stateContext = buildStateContext(storeState);
+  const stateContext = buildStateContext(storeState, immersiveContext);
 
   // Build virtual whiteboard context from ledger (shows changes by other agents this round)
   const virtualWbContext = buildVirtualWhiteboardContext(storeState, whiteboardLedger);
@@ -163,6 +177,9 @@ Personalize your teaching based on their background when relevant. Address them 
 
   const roleGuideline = ROLE_GUIDELINES[agentConfig.role] || ROLE_GUIDELINES.student;
 
+  // Add immersive guidelines when immersive context is provided
+  const immersiveGuidelinesSection = immersiveContext ? IMMERSIVE_GUIDELINES : '';
+
   // Build language constraint from stage language directive
   const langDirective = storeState.stage?.languageDirective;
   const languageConstraint = langDirective ? `\n# Language (CRITICAL)\n${langDirective}\n` : '';
@@ -175,7 +192,7 @@ ${agentConfig.persona}
 
 ## Your Classroom Role
 ${roleGuideline}
-${studentProfileSection}${peerContext}${languageConstraint}
+${studentProfileSection}${peerContext}${languageConstraint}${immersiveGuidelinesSection}
 # Output Format
 You MUST output a JSON array for ALL responses. Each element is an object with a \`type\` field:
 
@@ -614,7 +631,10 @@ DO NOT redraw content that already exists. Check positions above before adding n
 /**
  * Build context string from store state
  */
-function buildStateContext(storeState: StatelessChatRequest['storeState']): string {
+function buildStateContext(
+  storeState: StatelessChatRequest['storeState'],
+  immersiveContext?: ImmersiveContext,
+): string {
   const { stage, scenes, currentSceneId, mode, whiteboardOpen } = storeState;
 
   const lines: string[] = [];
@@ -664,6 +684,35 @@ function buildStateContext(storeState: StatelessChatRequest['storeState']): stri
     }
   } else if (scenes.length > 0) {
     lines.push('No scene currently selected');
+  }
+
+  // Immersive scene context (when provided and matches current scene)
+  if (immersiveContext && currentSceneId === immersiveContext.sceneId) {
+    lines.push('');
+    lines.push('## Current Immersive Scene');
+    if (immersiveContext.sceneTitle) {
+      lines.push(`Scene: ${immersiveContext.sceneTitle}`);
+    }
+    if (immersiveContext.historicalContext) {
+      lines.push(`Historical context: ${immersiveContext.historicalContext}`);
+    }
+    if (immersiveContext.narrativeText) {
+      const truncated =
+        immersiveContext.narrativeText.length > 200
+          ? immersiveContext.narrativeText.slice(0, 200) + '...'
+          : immersiveContext.narrativeText;
+      lines.push(`Narration: ${truncated}`);
+    }
+    if (immersiveContext.keyFormulas && immersiveContext.keyFormulas.length > 0) {
+      lines.push(`Key formulas shown: ${immersiveContext.keyFormulas.join(', ')}`);
+    }
+    if (immersiveContext.sceneImageUrl) {
+      lines.push('Scene has a background image - students are viewing this visual content.');
+    }
+    lines.push('');
+    lines.push(
+      'IMPORTANT: The student is asking about THIS specific scene. Reference narration, historical context, and formulas above in your answer.',
+    );
   }
 
   // List first few scenes
